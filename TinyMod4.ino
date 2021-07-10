@@ -11,6 +11,9 @@ byte bolt [NO_BOLT];
 #define NO_GEMINI 6
 byte Gemini [NO_GEMINI];
 
+// Uncomment the next line to enable first up chording
+//#define FIRST_UP_CHORDING
+
 /* Structure of a dictionary entry */
 typedef struct {
   const char *name;
@@ -324,35 +327,72 @@ void read_AB () {
 }
 
 boolean pressed = false;
+int chorda = 0;
+int chordb = 0;
+int helda = 0;
+int heldb = 0;
 
 NAMED(_readall, "readall");
 void read_all () {
   int a = 0;
+  int b = 0;
   pressed = true;
   read_raw_keys ();
   read_AB ();
-  OVER (); OVER (); OR ();
+  b = POP ();
   a = POP ();
-  if (a == 0) pressed = false;
+
+  chorda |= a;
+  chordb |= b;
+  
+#ifndef FIRST_UP_CHORDING
+  if ((a | b) == 0) {
+    pressed = false;
+    PUSH (chorda);
+    PUSH (chordb);
+    chorda = 0;
+    chordb = 0;
+  }
+#else 
+  if ((a | b) == 0 && (helda | heldb) == 0) {
+    pressed = false;
+    PUSH (chorda);
+    PUSH (chordb);
+    chorda = 0;
+    chordb = 0;
+    helda = 0;
+    heldb = 0;
+  } else if ((a | b) == 0) {
+    chorda = 0;
+    chordb = 0;
+    helda = 0;
+    heldb = 0;
+  } else if ((((chorda ^ a) & chorda) & ~helda) != 0 || (((chordb ^ b) & chordb) & ~heldb) != 0) {
+    pressed = false;
+    PUSH (chorda);
+    PUSH (chordb);
+    chorda &= ~((chorda ^ a) & chorda);
+    chordb &= ~((chordb ^ b) & chordb);
+    helda = chorda;
+    heldb = chordb;
+  } else if (((chorda ^ a) & chorda) != 0 || ((chordb ^ b) & chordb) != 0) {
+    chorda &= ~((chorda ^ a) & chorda);
+    chordb &= ~((chordb ^ b) & chordb);
+    helda = chorda;
+    heldb = chordb;
+  }
+#endif
 }
 
 NAMED(_scan, "scan");
 void scan () {
-  int a = 0; int b = 0;
   do {
-    do {
-      read_all ();
-    } while (!pressed);
-    delay (30);
     read_all ();
+    delay(30);
   } while (!pressed);
-  a = 0; b = 0;
   do {
     read_all ();
-    b |= POP ();
-    a |= POP ();
   } while (pressed);
-  PUSH (a); PUSH (b);
 }
 
 NAMED(_test, "test");
